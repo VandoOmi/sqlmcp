@@ -1,5 +1,7 @@
 package com.vando.mcp_test.config;
 
+import com.vando.mcp_test.config.DatabaseConfigService;
+import com.vando.mcp_test.config.DatabaseConnectionConfig;
 import com.vando.mcp_test.mcp.DynamicToolManager;
 import com.vando.mcp_test.mcp.DynamicToolManager.RefreshResult;
 import com.vando.mcp_test.mcp.SqlValidator;
@@ -7,6 +9,10 @@ import com.vando.mcp_test.service.TableRegistryService;
 import com.vando.mcp_test.service.ToolRegistryService;
 import com.vando.mcp_test.service.ToolRegistryService.ToolParameter;
 import com.vando.mcp_test.service.DataQueryService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.SpringApplication;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,19 +24,27 @@ import java.util.Map;
 @RequestMapping("/api")
 public class ToolRefreshController {
 
+    private static final Logger log = LoggerFactory.getLogger(ToolRefreshController.class);
+
     private final DynamicToolManager dynamicToolManager;
     private final ToolRegistryService toolRegistry;
     private final TableRegistryService tableRegistry;
     private final DataQueryService dataQuery;
+    private final DatabaseConfigService databaseConfigService;
+    private final ConfigurableApplicationContext applicationContext;
 
     public ToolRefreshController(DynamicToolManager dynamicToolManager,
                                  ToolRegistryService toolRegistry,
                                  TableRegistryService tableRegistry,
-                                 DataQueryService dataQuery) {
+                                 DataQueryService dataQuery,
+                                 DatabaseConfigService databaseConfigService,
+                                 ConfigurableApplicationContext applicationContext) {
         this.dynamicToolManager = dynamicToolManager;
         this.toolRegistry = toolRegistry;
         this.tableRegistry = tableRegistry;
         this.dataQuery = dataQuery;
+        this.databaseConfigService = databaseConfigService;
+        this.applicationContext = applicationContext;
     }
 
     // ---- Dashboard ----
@@ -41,6 +55,7 @@ public class ToolRefreshController {
         stats.put("tools", toolRegistry.listAllTools().size());
         stats.put("activeTools", toolRegistry.loadActiveTools().size());
         stats.put("tables", tableRegistry.listTables().size());
+        stats.put("externalDb", databaseConfigService.isExternalConfigActive());
         return ResponseEntity.ok(stats);
     }
 
@@ -181,6 +196,73 @@ public class ToolRefreshController {
         result.put("rowCount", dataQuery.countRows(name));
         result.put("data", dataQuery.getTableData(name, limit));
         return ResponseEntity.ok(result);
+    }
+
+    // ---- Database Configuration ----
+
+    @GetMapping("/config/database")
+    public ResponseEntity<?> getDatabaseConfig() {
+        DatabaseConnectionConfig config = databaseConfigService.getCurrentConfigWithoutPassword();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("url", config.getUrl());
+        result.put("driverClassName", config.getDriverClassName());
+        result.put("username", config.getUsername());
+        result.put("externalConfigActive", databaseConfigService.isExternalConfigActive());
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/config/database/test")
+    public ResponseEntity<?> testDatabaseConfig(@RequestBody DatabaseConnectionConfig config) {
+        if (config.getUrl() == null || config.getUrl().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "URL ist erforderlich"));
+        }
+        if (config.getDriverClassName() == null || config.getDriverClassName().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Driver-Klasse ist erforderlich"));
+        }
+        try {
+            String dbInfo = databaseConfigService.testConnection(config);
+            return ResponseEntity.ok(Map.of("success", true, "info", dbInfo));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/config/database")
+    public ResponseEntity<?> saveDatabaseConfig(@RequestBody DatabaseConnectionConfig config) {
+        if (config.getUrl() == null || config.getUrl().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "URL ist erforderlich"));
+        }
+        if (config.getDriverClassName() == null || config.getDriverClassName().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Driver-Klasse ist erforderlich"));
+        }
+        try {
+            databaseConfigService.saveAndApply(config);
+            return ResponseEntity.ok(Map.of("message", "Konfiguration gespeichert und angewendet"));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("error", "Verbindungsfehler: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/config/database/reset")
+    public ResponseEntity<?> resetDatabaseConfig() {
+        databaseConfigService.resetToDefault();
+        return ResponseEntity.ok(Map.of("message", "Datenbankverbindung auf H2 Standard zurückgesetzt"));
+    }
+
+    @PostMapping("/restart")
+    public ResponseEntity<?> restartServer() {
+        log.info("Server restart requested via admin panel");
+        Thread restartThread = new Thread(() -> {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            int exitCode = SpringApplication.exit(applicationContext, () -> 0);
+            System.exit(exitCode);
+        });
+        restartThread.start();
+        return ResponseEntity.ok(Map.of("message", "Server wird neu gestartet…"));
     }
 
     // ---- Request DTOs ----

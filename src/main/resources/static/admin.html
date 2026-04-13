@@ -89,6 +89,7 @@
         <a href="#" data-page="dashboard" class="active">Dashboard</a>
         <a href="#" data-page="tools">Tools</a>
         <a href="#" data-page="tables">Tabellen</a>
+        <a href="#" data-page="config">Konfiguration</a>
         <a href="#" data-page="admins">Admins</a>
     </nav>
     <div style="position:absolute;bottom:20px;left:0;right:0;padding:0 20px;">
@@ -106,6 +107,7 @@
             <div class="stat-card"><div class="value" id="stat-tools">-</div><div class="label">Tools gesamt</div></div>
             <div class="stat-card"><div class="value" id="stat-active">-</div><div class="label">Tools aktiv</div></div>
             <div class="stat-card"><div class="value" id="stat-tables">-</div><div class="label">Tabellen</div></div>
+            <div class="stat-card"><div class="value" id="stat-db">-</div><div class="label">Datenbank</div></div>
         </div>
         <div class="btn-group">
             <button class="btn btn-primary" onclick="refreshToolsAndReload()">Tools neu laden</button>
@@ -135,6 +137,69 @@
         <div id="table-detail" style="margin-top:24px"></div>
     </div>
 
+    <!-- Konfiguration -->
+    <div id="page-config" class="page">
+        <div class="section-header"><h2>Datenbank Konfiguration</h2></div>
+
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:24px">
+            <h3 style="font-size:15px;margin-bottom:4px;color:#58a6ff">Aktuelle Verbindung</h3>
+            <div id="config-current-status" style="font-size:13px;color:#8b949e;margin-bottom:12px">Wird geladen…</div>
+            <div class="form-group" style="margin:0">
+                <label>Verbindungs-URL</label>
+                <input type="text" id="config-current-url" readonly style="background:#0d1117;cursor:default">
+            </div>
+        </div>
+
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px">
+            <h3 style="font-size:15px;margin-bottom:16px;color:#58a6ff">Neue Verbindung konfigurieren</h3>
+            <div class="form-group">
+                <label>Datenbank-Typ / Treiber</label>
+                <select id="config-driver-preset" onchange="applyDriverPreset(this.value)">
+                    <option value="">— Treiber wählen —</option>
+                    <option value="h2">H2 (Standard / Intern)</option>
+                    <option value="postgresql">PostgreSQL</option>
+                    <option value="mysql">MySQL / MariaDB</option>
+                    <option value="mssql">Microsoft SQL Server</option>
+                    <option value="oracle">Oracle</option>
+                    <option value="db2">IBM DB2</option>
+                    <option value="custom">Benutzerdefiniert</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>JDBC URL</label>
+                <input type="text" id="config-url" placeholder="z.B. jdbc:postgresql://localhost:5432/meindb">
+            </div>
+            <div class="form-group">
+                <label>Driver-Klasse</label>
+                <input type="text" id="config-driver" placeholder="z.B. org.postgresql.Driver">
+            </div>
+            <div class="form-group">
+                <label>Benutzername</label>
+                <input type="text" id="config-username" placeholder="Datenbankbenutzer">
+            </div>
+            <div class="form-group">
+                <label>Passwort</label>
+                <input type="password" id="config-password" placeholder="Datenbankpasswort">
+            </div>
+
+            <div id="config-test-result" style="margin-bottom:12px;font-size:13px"></div>
+
+            <div class="btn-group">
+                <button class="btn" onclick="testDbConfig()">&#128268; Verbindung testen</button>
+                <button class="btn btn-primary" onclick="saveDbConfig()">&#128190; Speichern &amp; Anwenden</button>
+                <button class="btn btn-danger" onclick="resetDbConfig()">Zurücksetzen auf H2</button>
+            </div>
+
+            <div style="margin-top:16px;padding:12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:12px;color:#8b949e">
+                <strong style="color:#e1e4e8">Unterstützte Datenbanken:</strong> H2, PostgreSQL, MySQL / MariaDB und Microsoft SQL Server sind bereits im Lieferumfang enthalten und können direkt verwendet werden. Oracle und IBM DB2 erfordern manuelle Treiberinstallation.
+            </div>
+
+            <div style="margin-top:24px;padding:16px;background:#0d1117;border:1px solid #30363d;border-radius:6px">
+                <h3 style="margin-bottom:8px;font-size:14px;color:#e1e4e8">&#128260; Server Neustart</h3>
+                <p style="font-size:12px;color:#8b949e;margin-bottom:12px">Nach dem Speichern einer neuen Treiber-Konfiguration einen Neustart auslösen, damit alle Änderungen wirksam werden.</p>
+                <button class="btn btn-danger" onclick="restartServer()">&#9889; Server neu starten</button>
+            </div>
+        </div>
     <!-- Admins -->
     <div id="page-admins" class="page">
         <div class="section-header">
@@ -258,6 +323,7 @@ document.querySelectorAll('.sidebar nav a').forEach(a => {
         if (a.dataset.page === 'dashboard') loadDashboard();
         if (a.dataset.page === 'tools') loadTools();
         if (a.dataset.page === 'tables') loadTables();
+        if (a.dataset.page === 'config') loadDbConfig();
         if (a.dataset.page === 'admins') loadAdmins();
     });
 });
@@ -286,6 +352,7 @@ async function loadDashboard() {
     document.getElementById('stat-tools').textContent = data.tools;
     document.getElementById('stat-active').textContent = data.activeTools;
     document.getElementById('stat-tables').textContent = data.tables;
+    document.getElementById('stat-db').textContent = data.externalDb ? 'Extern' : 'H2';
 }
 
 // Tools
@@ -498,6 +565,101 @@ async function showTableData(name) {
                 <tbody>${result.data.map(row => '<tr>' + cols.map(c => '<td>' + esc(String(row[c] ?? '')) + '</td>').join('') + '</tr>').join('')}</tbody>
             </table>
         </div>`;
+}
+
+// Database Configuration
+const DRIVER_PRESETS = {
+    h2:         { url: 'jdbc:h2:mem:mcpdb', driver: 'org.h2.Driver', user: 'sa' },
+    postgresql: { url: 'jdbc:postgresql://localhost:5432/meindb', driver: 'org.postgresql.Driver', user: 'postgres' },
+    mysql:      { url: 'jdbc:mysql://localhost:3306/meindb', driver: 'com.mysql.cj.jdbc.Driver', user: 'root' },
+    mssql:      { url: 'jdbc:sqlserver://localhost:1433;databaseName=meindb', driver: 'com.microsoft.sqlserver.jdbc.SQLServerDriver', user: 'sa' },
+    oracle:     { url: 'jdbc:oracle:thin:@localhost:1521:orcl', driver: 'oracle.jdbc.OracleDriver', user: 'system' },
+    db2:        { url: 'jdbc:db2://localhost:50000/meindb', driver: 'com.ibm.db2.jcc.DB2Driver', user: 'db2admin' },
+    custom:     { url: '', driver: '', user: '' }
+};
+
+function applyDriverPreset(value) {
+    const preset = DRIVER_PRESETS[value];
+    if (!preset) return;
+    document.getElementById('config-url').value = preset.url;
+    document.getElementById('config-driver').value = preset.driver;
+    document.getElementById('config-username').value = preset.user;
+    document.getElementById('config-password').value = '';
+}
+
+async function loadDbConfig() {
+    const data = await api('/config/database');
+    document.getElementById('config-current-url').value = data.url || '';
+    const statusEl = document.getElementById('config-current-status');
+    if (data.externalConfigActive) {
+        statusEl.innerHTML = '<span style="color:#3fb950">&#9679; Externe Datenbank aktiv</span> &mdash; Benutzer: ' + esc(data.username || '');
+    } else {
+        statusEl.innerHTML = '<span style="color:#58a6ff">&#9679; H2 Standard (intern)</span>';
+    }
+}
+
+async function testDbConfig() {
+    const body = configBody();
+    if (!body) return;
+    const resultEl = document.getElementById('config-test-result');
+    resultEl.innerHTML = '<span style="color:#8b949e">Teste Verbindung…</span>';
+    const result = await api('/config/database/test', { method: 'POST', body: JSON.stringify(body) });
+    if (result.success) {
+        resultEl.innerHTML = '<span style="color:#3fb950">&#10003; Verbindung erfolgreich: ' + esc(result.info) + '</span>';
+    } else {
+        resultEl.innerHTML = '<span style="color:#f85149">&#10007; Fehler: ' + esc(result.error) + '</span>';
+    }
+}
+
+async function saveDbConfig() {
+    const body = configBody();
+    if (!body) return;
+    const result = await api('/config/database', { method: 'PUT', body: JSON.stringify(body) });
+    if (result.error) {
+        toast(result.error, 'error');
+    } else {
+        toast(result.message || 'Konfiguration gespeichert');
+        loadDbConfig();
+        loadDashboard();
+    }
+}
+
+async function resetDbConfig() {
+    if (!confirm('Datenbankverbindung auf H2 Standard zurücksetzen?')) return;
+    const result = await api('/config/database/reset', { method: 'POST' });
+    toast(result.message || 'Zurückgesetzt');
+    document.getElementById('config-driver-preset').value = '';
+    document.getElementById('config-url').value = '';
+    document.getElementById('config-driver').value = '';
+    document.getElementById('config-username').value = '';
+    document.getElementById('config-password').value = '';
+    document.getElementById('config-test-result').innerHTML = '';
+    loadDbConfig();
+    loadDashboard();
+}
+
+async function restartServer() {
+    if (!confirm('Server wirklich neu starten? Die Verbindung wird kurz unterbrochen.')) return;
+    try {
+        await api('/restart', { method: 'POST' });
+        toast('Server wird neu gestartet… Seite lädt in 10 Sekunden neu.');
+        setTimeout(() => location.reload(), 10000);
+    } catch (e) {
+        toast('Neustart ausgelöst – Seite lädt in 10 Sekunden neu.');
+        setTimeout(() => location.reload(), 10000);
+    }
+}
+
+function configBody() {
+    const url = document.getElementById('config-url').value.trim();
+    const driverClassName = document.getElementById('config-driver').value.trim();
+    const username = document.getElementById('config-username').value.trim();
+    const password = document.getElementById('config-password').value;
+    if (!url || !driverClassName) {
+        toast('URL und Driver-Klasse sind Pflichtfelder', 'error');
+        return null;
+    }
+    return { url, driverClassName, username, password };
 }
 
 // Escape HTML

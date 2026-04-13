@@ -8,6 +8,7 @@ import com.vando.mcp_test.service.ToolRegistryService.ToolDefinition;
 import com.vando.mcp_test.service.ToolRegistryService.ToolParameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -32,7 +33,7 @@ public class DynamicToolManager {
 
     public DynamicToolManager(McpSyncServer mcpServer,
                               ToolRegistryService toolRegistry,
-                              NamedParameterJdbcTemplate namedJdbc,
+                              @Qualifier("queryNamedJdbcTemplate") NamedParameterJdbcTemplate namedJdbc,
                               ObjectMapper objectMapper) {
         this.mcpServer = mcpServer;
         this.toolRegistry = toolRegistry;

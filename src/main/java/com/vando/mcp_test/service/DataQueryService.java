@@ -1,5 +1,6 @@
 package com.vando.mcp_test.service;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +19,7 @@ public class DataQueryService {
     private final JdbcTemplate jdbc;
     private final TableRegistryService registry;
 
-    public DataQueryService(JdbcTemplate jdbc, TableRegistryService registry) {
+    public DataQueryService(@Qualifier("queryJdbcTemplate") JdbcTemplate jdbc, TableRegistryService registry) {
         this.jdbc = jdbc;
         this.registry = registry;
     }
