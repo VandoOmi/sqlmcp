@@ -77,6 +77,8 @@
         .param-row .remove-param { background: none; border: none; color: #da3633; cursor: pointer; font-size: 18px; }
         .empty-state { text-align: center; padding: 40px; color: #484f58; }
         .data-table-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; }
+        .btn-logout { display: block; width: 100%; padding: 8px 0; color: #8b949e; font-size: 13px; cursor: pointer; text-align: center; border: 1px solid #30363d; border-radius: 6px; background: none; font-family: inherit; }
+        .btn-logout:hover { background: #1c2128; color: #e1e4e8; }
     </style>
 </head>
 <body>
@@ -87,7 +89,13 @@
         <a href="#" data-page="dashboard" class="active">Dashboard</a>
         <a href="#" data-page="tools">Tools</a>
         <a href="#" data-page="tables">Tabellen</a>
+        <a href="#" data-page="admins">Admins</a>
     </nav>
+    <div style="position:absolute;bottom:20px;left:0;right:0;padding:0 20px;">
+        <form action="/logout" method="post" style="margin:0">
+            <button type="submit" class="btn-logout">Abmelden</button>
+        </form>
+    </div>
 </div>
 
 <div class="main">
@@ -125,6 +133,18 @@
         <div class="section-header"><h2>Tabellen</h2></div>
         <div id="tables-list"></div>
         <div id="table-detail" style="margin-top:24px"></div>
+    </div>
+
+    <!-- Admins -->
+    <div id="page-admins" class="page">
+        <div class="section-header">
+            <h2>Admin-Benutzer</h2>
+            <button class="btn btn-primary" onclick="openCreateAdmin()">+ Neuer Admin</button>
+        </div>
+        <table>
+            <thead><tr><th>Benutzername</th><th>Erstellt am</th><th>Aktionen</th></tr></thead>
+            <tbody id="admins-table"></tbody>
+        </table>
     </div>
 </div>
 
@@ -167,6 +187,63 @@
     </div>
 </div>
 
+<!-- Admin Create Modal -->
+<div class="modal-overlay" id="admin-create-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Neuer Admin</h2>
+            <button class="close" onclick="closeAdminModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Benutzername</label>
+                <input type="text" id="new-admin-username" placeholder="Benutzername" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>Passwort</label>
+                <input type="password" id="new-admin-password" placeholder="Passwort" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label>Passwort bestätigen</label>
+                <input type="password" id="new-admin-password2" placeholder="Passwort wiederholen" autocomplete="new-password">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeAdminModal()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="saveNewAdmin()">Erstellen</button>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Reset Password Modal -->
+<div class="modal-overlay" id="admin-reset-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Passwort zurücksetzen</h2>
+            <button class="close" onclick="closeResetModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="reset-admin-username">
+            <div class="form-group">
+                <label>Benutzername</label>
+                <input type="text" id="reset-admin-display" disabled>
+            </div>
+            <div class="form-group">
+                <label>Neues Passwort</label>
+                <input type="password" id="reset-new-password" placeholder="Neues Passwort" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label>Neues Passwort bestätigen</label>
+                <input type="password" id="reset-new-password2" placeholder="Passwort wiederholen" autocomplete="new-password">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeResetModal()">Abbrechen</button>
+            <button class="btn btn-primary" onclick="saveResetPassword()">Zurücksetzen</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const API = '/api';
 
@@ -181,6 +258,7 @@ document.querySelectorAll('.sidebar nav a').forEach(a => {
         if (a.dataset.page === 'dashboard') loadDashboard();
         if (a.dataset.page === 'tools') loadTools();
         if (a.dataset.page === 'tables') loadTables();
+        if (a.dataset.page === 'admins') loadAdmins();
     });
 });
 
@@ -424,6 +502,86 @@ async function showTableData(name) {
 
 // Escape HTML
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Admins
+async function loadAdmins() {
+    const admins = await api('/admins');
+    const tbody = document.getElementById('admins-table');
+    if (!Array.isArray(admins) || admins.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Keine Admins vorhanden</td></tr>';
+        return;
+    }
+    tbody.innerHTML = admins.map(a => `
+        <tr>
+            <td><strong>${esc(a.USERNAME)}</strong></td>
+            <td>${a.CREATED_AT ? new Date(a.CREATED_AT).toLocaleDateString('de') : '—'}</td>
+            <td>
+                <div class="btn-group">
+                    <button class="btn btn-sm" data-username="${esc(a.USERNAME)}" onclick="openResetPassword(this.dataset.username)">Passwort zurücksetzen</button>
+                    <button class="btn btn-sm btn-danger" data-username="${esc(a.USERNAME)}" onclick="deleteAdmin(this.dataset.username)">Löschen</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openCreateAdmin() {
+    document.getElementById('new-admin-username').value = '';
+    document.getElementById('new-admin-password').value = '';
+    document.getElementById('new-admin-password2').value = '';
+    document.getElementById('admin-create-modal').classList.add('show');
+}
+
+function closeAdminModal() {
+    document.getElementById('admin-create-modal').classList.remove('show');
+}
+
+async function saveNewAdmin() {
+    const username = document.getElementById('new-admin-username').value.trim();
+    const password = document.getElementById('new-admin-password').value;
+    const password2 = document.getElementById('new-admin-password2').value;
+    if (!username) { toast('Benutzername ist erforderlich', 'error'); return; }
+    if (!password) { toast('Passwort ist erforderlich', 'error'); return; }
+    if (password !== password2) { toast('Passwörter stimmen nicht überein', 'error'); return; }
+    const result = await api('/admins', { method: 'POST', body: JSON.stringify({ username, password }) });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast('Admin erstellt');
+    closeAdminModal();
+    loadAdmins();
+}
+
+async function deleteAdmin(username) {
+    if (!confirm('Admin "' + username + '" wirklich löschen?')) return;
+    const result = await api('/admins/' + encodeURIComponent(username), { method: 'DELETE' });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast('Admin gelöscht');
+    loadAdmins();
+}
+
+function openResetPassword(username) {
+    document.getElementById('reset-admin-username').value = username;
+    document.getElementById('reset-admin-display').value = username;
+    document.getElementById('reset-new-password').value = '';
+    document.getElementById('reset-new-password2').value = '';
+    document.getElementById('admin-reset-modal').classList.add('show');
+}
+
+function closeResetModal() {
+    document.getElementById('admin-reset-modal').classList.remove('show');
+}
+
+async function saveResetPassword() {
+    const username = document.getElementById('reset-admin-username').value;
+    const password = document.getElementById('reset-new-password').value;
+    const password2 = document.getElementById('reset-new-password2').value;
+    if (!password) { toast('Neues Passwort ist erforderlich', 'error'); return; }
+    if (password !== password2) { toast('Passwörter stimmen nicht überein', 'error'); return; }
+    const result = await api('/admins/' + encodeURIComponent(username) + '/reset-password',
+        { method: 'POST', body: JSON.stringify({ password }) });
+    if (result.error) { toast(result.error, 'error'); return; }
+    toast('Passwort zurückgesetzt');
+    closeResetModal();
+}
 
 // Init
 loadDashboard();
