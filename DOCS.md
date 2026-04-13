@@ -9,12 +9,15 @@ mcp_test/
     │   ├── McpTestApplication.java
     │   ├── config/
     │   │   ├── SecurityConfig.java
-    │   │   └── JacksonConfig.java
+    │   │   ├── JacksonConfig.java
+    │   │   └── ToolRefreshController.java
     │   ├── service/
     │   │   ├── TableRegistryService.java
-    │   │   └── DataQueryService.java
+    │   │   ├── DataQueryService.java
+    │   │   └── ToolRegistryService.java
     │   └── mcp/
-    │       ├── DatabaseTools.java
+    │       ├── DynamicToolManager.java
+    │       ├── SqlValidator.java
     │       ├── DatabaseResources.java
     │       └── DatabasePrompts.java
     └── resources/
@@ -44,12 +47,15 @@ Zentrale Konfigurationsdatei. Definiert:
 Wird beim Start automatisch ausgeführt. Erstellt die Datenbanktabellen:
 - **TABLE_REGISTRY** — Metadaten-Tabelle: speichert Namen und Beschreibung registrierter Tabellen
 - **COLUMN_REGISTRY** — Metadaten-Tabelle: speichert Spaltendefinitionen (Name, Datentyp, Beschreibung, Nullable, Primary Key) pro Tabelle
+- **TOOL_REGISTRY** — Dynamische Tool-Definitionen: speichert Toolname, Beschreibung, SQL-Query und Active-Flag
+- **TOOL_PARAMETER** — Parameter-Definitionen pro Tool: Name, Typ (string/integer/number), Beschreibung, Required-Flag
 - **CUSTOMERS** — Beispieltabelle für Kundendaten
 - **ORDERS** — Beispieltabelle für Bestellungen
 
 ### `src/main/resources/data.sql`
 Wird nach `schema.sql` automatisch ausgeführt. Befüllt:
 - Registry-Einträge für CUSTOMERS und ORDERS (mit Spaltenbeschreibungen)
+- 8 Seed-Tools in TOOL_REGISTRY/TOOL_PARAMETER (list-tables, describe-table, query-customers, customers-by-city, orders-by-customer, high-value-orders, count-customers, count-orders)
 - 5 Beispielkunden und 7 Beispielbestellungen
 
 ---
@@ -65,6 +71,9 @@ Spring Security Konfiguration. Gibt die MCP-Endpunkte (`/mcp/**`) und die H2-Kon
 ### `config/JacksonConfig.java`
 Stellt eine `ObjectMapper`-Bean (Jackson 3.x) bereit, die von allen MCP-Klassen für JSON-Serialisierung verwendet wird.
 
+### `config/ToolRefreshController.java`
+REST-Controller mit einem Endpunkt `POST /api/tools/refresh`. Ruft `DynamicToolManager.refreshTools()` auf, um Tools aus der Datenbank neu zu laden. Gibt ein `RefreshResult` mit Anzahl hinzugefügter, entfernter und übersprungener Tools sowie Fehlermeldungen zurück.
+
 ### `service/TableRegistryService.java`
 Verwaltet die Tabellen-Registry. Funktionen:
 - `listTables()` — Alle registrierten Tabellen auflisten
@@ -76,20 +85,45 @@ Verwaltet die Tabellen-Registry. Funktionen:
 Sicherheit: Alle Tabellen- und Spaltennamen werden gegen ein Whitelist-Pattern (`[A-Za-z][A-Za-z0-9_]`) validiert, um SQL-Injection zu verhindern.
 
 ### `service/DataQueryService.java`
-Führt Datenabfragen auf registrierten Tabellen durch. Funktionen:
+Führt Datenabfragen auf registrierten Tabellen durch. Wird von DatabaseResources und DatabasePrompts verwendet. Funktionen:
 - `queryTable(name, filterColumn, filterOperator, filterValue, orderBy, limit)` — Dynamische SELECT-Query mit optionalem WHERE-Filter (parametrisiert), ORDER BY und LIMIT
 - `countRows(name)` — `SELECT COUNT(*)` auf eine Tabelle
 - `getTableData(name, limit)` — Alle Daten einer Tabelle mit Limit abrufen
 
 Sicherheit: Nur registrierte Tabellen können abgefragt werden. Operatoren werden auf eine Whitelist beschränkt (`=`, `!=`, `>`, `<`, `>=`, `<=`, `LIKE`). Filterwerte werden als parametrisierte Query-Parameter übergeben.
 
-### `mcp/DatabaseTools.java`
-MCP-Tools — die Hauptschnittstelle für AI-Clients. Stellt 5 Tools bereit, die über `@McpTool`-Annotationen definiert sind:
-- **list-tables** — Ruft `TableRegistryService.listTables()` auf und gibt das Ergebnis als formatiertes JSON zurück
-- **describe-table** — Zeigt Spaltendefinitionen einer Tabelle
-- **query-table** — Flexible Datenabfrage mit Filter, Sortierung und Limit
-- **count-rows** — Zählt Zeilen einer Tabelle
-- **register-table** — Nimmt einen Tabellennamen, Beschreibung und JSON-Array von Spaltendefinitionen entgegen, erstellt die Tabelle dynamisch
+### `service/ToolRegistryService.java`
+Liest dynamische Tool-Definitionen aus der Datenbank. Funktionen:
+- `loadActiveTools()` — Lädt alle aktiven Tools aus `TOOL_REGISTRY` inkl. ihrer Parameter aus `TOOL_PARAMETER`
+
+Gibt `ToolDefinition`-Records zurück (Name, Beschreibung, SQL-Query, Liste von `ToolParameter`).
+
+### `mcp/DynamicToolManager.java`
+Kernkomponente für dynamische MCP-Tool-Verwaltung. Registriert und entfernt Tools zur Laufzeit über die `McpSyncServer`-API.
+
+Funktionen:
+- `refreshTools()` — Diff zwischen aktuell registrierten und gewünschten (DB) Tools. Fügt neue hinzu, entfernt gelöschte. Clients werden automatisch per `tools/list_changed` benachrichtigt.
+- Beim App-Start werden Tools automatisch über `ApplicationReadyEvent` geladen.
+
+Pro Tool wird ein `SyncToolSpecification` gebaut mit:
+- **inputSchema** — JSON-Schema aus `TOOL_PARAMETER`-Einträgen generiert
+- **callHandler** — Validiert Parameter (Typ-Check, Required-Check), führt SQL per `NamedParameterJdbcTemplate` aus, gibt Ergebnis als JSON zurück
+
+Sicherheit:
+- SQL-Validierung über `SqlValidator` (nur SELECT, Keyword-Blocklist, H2-Blocklist)
+- Parameter-Binding (kein String-Concat → kein SQL-Injection)
+- Query-Timeout: 10 Sekunden
+- Auto-LIMIT: Falls kein LIMIT im SQL, wird automatisch `LIMIT 1000` angehängt
+- Ungültige Tools werden geloggt aber übersprungen (kein App-Crash)
+
+### `mcp/SqlValidator.java`
+Utility-Klasse zur Validierung von SQL-Queries. Prüft:
+- Query muss mit `SELECT` beginnen
+- Keine Semikolons (verhindert Statement-Stacking)
+- **Keyword-Blocklist**: INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE, MERGE, EXEC, EXECUTE, CALL, SET, GRANT, REVOKE, COMMIT, ROLLBACK
+- **H2-Funktionen-Blocklist**: FILE_READ, FILE_WRITE, CSVREAD, CSVWRITE, LINK_SCHEMA
+
+Wirft `SqlValidationException` bei Verstößen.
 
 ### `mcp/DatabaseResources.java`
 MCP-Resources — stellt Daten als adressierbare URIs bereit, die AI-Clients lesen können:

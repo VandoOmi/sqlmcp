@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Admin Center</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e1e4e8; }
+
+        /* Layout */
+        .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 220px; background: #161b22; border-right: 1px solid #30363d; padding: 20px 0; }
+        .sidebar h1 { font-size: 16px; padding: 0 20px 20px; border-bottom: 1px solid #30363d; color: #58a6ff; }
+        .sidebar nav a { display: block; padding: 10px 20px; color: #8b949e; text-decoration: none; font-size: 14px; border-left: 3px solid transparent; }
+        .sidebar nav a:hover, .sidebar nav a.active { background: #1c2128; color: #e1e4e8; border-left-color: #58a6ff; }
+        .main { margin-left: 220px; padding: 24px; }
+
+        /* Cards */
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; }
+        .stat-card .value { font-size: 32px; font-weight: 700; color: #58a6ff; }
+        .stat-card .label { font-size: 13px; color: #8b949e; margin-top: 4px; }
+
+        /* Buttons */
+        .btn { padding: 8px 16px; border: 1px solid #30363d; border-radius: 6px; background: #21262d; color: #e1e4e8; cursor: pointer; font-size: 13px; }
+        .btn:hover { background: #30363d; }
+        .btn-primary { background: #238636; border-color: #2ea043; }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-danger { background: #da3633; border-color: #f85149; }
+        .btn-danger:hover { background: #f85149; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #30363d; font-size: 13px; }
+        th { background: #1c2128; color: #8b949e; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+        tr:hover { background: #1c2128; }
+
+        /* Forms */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; color: #8b949e; margin-bottom: 6px; }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d;
+            border-radius: 6px; color: #e1e4e8; font-size: 14px; font-family: inherit;
+        }
+        .form-group textarea { min-height: 80px; font-family: 'Consolas', 'Monaco', monospace; resize: vertical; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #58a6ff; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; }
+        .checkbox-group input[type="checkbox"] { width: auto; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: flex-start; padding-top: 60px; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 600px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 16px; }
+        .modal-header .close { background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; }
+        .modal-body { padding: 20px; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid #30363d; display: flex; justify-content: flex-end; gap: 8px; }
+
+        /* Misc */
+        .page { display: none; }
+        .page.active { display: block; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .section-header h2 { font-size: 20px; }
+        .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .badge-green { background: #238636; color: #fff; }
+        .badge-gray { background: #484f58; color: #8b949e; }
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 200; animation: fadeIn 0.3s; }
+        .toast-success { background: #238636; color: #fff; }
+        .toast-error { background: #da3633; color: #fff; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .sql-preview { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; font-family: 'Consolas', monospace; font-size: 13px; white-space: pre-wrap; overflow-x: auto; }
+        .param-row { display: grid; grid-template-columns: 1fr 100px 1fr 60px 40px; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .param-row input, .param-row select { padding: 6px 8px; font-size: 13px; }
+        .param-row .remove-param { background: none; border: none; color: #da3633; cursor: pointer; font-size: 18px; }
+        .empty-state { text-align: center; padding: 40px; color: #484f58; }
+        .data-table-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h1>MCP Admin</h1>
+    <nav>
+        <a href="#" data-page="dashboard" class="active">Dashboard</a>
+        <a href="#" data-page="tools">Tools</a>
+        <a href="#" data-page="tables">Tabellen</a>
+    </nav>
+</div>
+
+<div class="main">
+    <!-- Dashboard -->
+    <div id="page-dashboard" class="page active">
+        <h2 style="margin-bottom:16px">Dashboard</h2>
+        <div class="stats">
+            <div class="stat-card"><div class="value" id="stat-tools">-</div><div class="label">Tools gesamt</div></div>
+            <div class="stat-card"><div class="value" id="stat-active">-</div><div class="label">Tools aktiv</div></div>
+            <div class="stat-card"><div class="value" id="stat-tables">-</div><div class="label">Tabellen</div></div>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-primary" onclick="refreshToolsAndReload()">Tools neu laden</button>
+            <a href="/h2-console" target="_blank" class="btn">H2 Console</a>
+        </div>
+    </div>
+
+    <!-- Tools -->
+    <div id="page-tools" class="page">
+        <div class="section-header">
+            <h2>Tools verwalten</h2>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="openCreateTool()">+ Neues Tool</button>
+                <button class="btn" onclick="refreshToolsAndReload()">Refresh MCP</button>
+            </div>
+        </div>
+        <table>
+            <thead><tr><th>Name</th><th>Beschreibung</th><th>Parameter</th><th>Status</th><th>Aktionen</th></tr></thead>
+            <tbody id="tools-table"></tbody>
+        </table>
+    </div>
+
+    <!-- Tables -->
+    <div id="page-tables" class="page">
+        <div class="section-header"><h2>Tabellen</h2></div>
+        <div id="tables-list"></div>
+        <div id="table-detail" style="margin-top:24px"></div>
+    </div>
+</div>
+
+<!-- Tool Modal -->
+<div class="modal-overlay" id="tool-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="modal-title">Neues Tool erstellen</h2>
+            <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="tool-edit-name">
+            <div class="form-group">
+                <label>Tool Name</label>
+                <input type="text" id="tool-name" placeholder="z.B. search-products">
+            </div>
+            <div class="form-group">
+                <label>Beschreibung</label>
+                <input type="text" id="tool-description" placeholder="Was macht dieses Tool?">
+            </div>
+            <div class="form-group">
+                <label>SQL Query (nur SELECT erlaubt, Parameter mit :paramName)</label>
+                <textarea id="tool-sql" placeholder="SELECT * FROM CUSTOMERS WHERE CITY = :city"></textarea>
+                <div id="sql-validation" style="margin-top:6px;font-size:12px"></div>
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="tool-active" checked>
+                <label for="tool-active" style="margin:0">Aktiv</label>
+            </div>
+            <div class="form-group">
+                <label>Parameter</label>
+                <div id="params-list"></div>
+                <button class="btn btn-sm" onclick="addParamRow()" style="margin-top:8px">+ Parameter</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal()">Abbrechen</button>
+            <button class="btn btn-primary" id="modal-save" onclick="saveTool()">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = '/api';
+
+// Navigation
+document.querySelectorAll('.sidebar nav a').forEach(a => {
+    a.addEventListener('click', e => {
+        e.preventDefault();
+        document.querySelectorAll('.sidebar nav a').forEach(x => x.classList.remove('active'));
+        a.classList.add('active');
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('page-' + a.dataset.page).classList.add('active');
+        if (a.dataset.page === 'dashboard') loadDashboard();
+        if (a.dataset.page === 'tools') loadTools();
+        if (a.dataset.page === 'tables') loadTables();
+    });
+});
+
+// Toast
+function toast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+}
+
+// API helpers
+async function api(path, options = {}) {
+    const res = await fetch(API + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+    });
+    return res.json();
+}
+
+// Dashboard
+async function loadDashboard() {
+    const data = await api('/dashboard');
+    document.getElementById('stat-tools').textContent = data.tools;
+    document.getElementById('stat-active').textContent = data.activeTools;
+    document.getElementById('stat-tables').textContent = data.tables;
+}
+
+// Tools
+async function loadTools() {
+    const tools = await api('/tools');
+    const tbody = document.getElementById('tools-table');
+    if (tools.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Keine Tools vorhanden</td></tr>';
+        return;
+    }
+    tbody.innerHTML = tools.map(t => `
+        <tr>
+            <td><strong>${esc(t.TOOL_NAME)}</strong></td>
+            <td>${esc(t.DESCRIPTION || '')}</td>
+            <td>${(t.parameters || []).map(p => '<code>' + esc(p.name) + '</code>').join(', ') || '—'}</td>
+            <td><span class="badge ${t.ACTIVE ? 'badge-green' : 'badge-gray'}">${t.ACTIVE ? 'Aktiv' : 'Inaktiv'}</span></td>
+            <td>
+                <div class="btn-group">
+                    <button class="btn btn-sm" onclick="toggleTool('${esc(t.TOOL_NAME)}')">${t.ACTIVE ? 'Deaktivieren' : 'Aktivieren'}</button>
+                    <button class="btn btn-sm" onclick="editTool('${esc(t.TOOL_NAME)}')">Bearbeiten</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteTool('${esc(t.TOOL_NAME)}')">Löschen</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function toggleTool(name) {
+    await api('/tools/' + encodeURIComponent(name) + '/toggle', { method: 'POST' });
+    toast('Tool Status geändert');
+    loadTools();
+}
+
+async function deleteTool(name) {
+    if (!confirm('Tool "' + name + '" wirklich löschen?')) return;
+    await api('/tools/' + encodeURIComponent(name), { method: 'DELETE' });
+    toast('Tool gelöscht');
+    loadTools();
+}
+
+async function refreshToolsAndReload() {
+    const result = await api('/tools/refresh', { method: 'POST' });
+    toast(`Refresh: ${result.added} geladen, ${result.removed} entfernt, ${result.skipped} übersprungen`);
+    loadDashboard();
+    loadTools();
+}
+
+// Modal
+function closeModal() { document.getElementById('tool-modal').classList.remove('show'); }
+
+function openCreateTool() {
+    document.getElementById('modal-title').textContent = 'Neues Tool erstellen';
+    document.getElementById('tool-edit-name').value = '';
+    document.getElementById('tool-name').value = '';
+    document.getElementById('tool-name').disabled = false;
+    document.getElementById('tool-description').value = '';
+    document.getElementById('tool-sql').value = '';
+    document.getElementById('tool-active').checked = true;
+    document.getElementById('params-list').innerHTML = '';
+    document.getElementById('sql-validation').innerHTML = '';
+    document.getElementById('tool-modal').classList.add('show');
+}
+
+async function editTool(name) {
+    const tool = await api('/tools/' + encodeURIComponent(name));
+    document.getElementById('modal-title').textContent = 'Tool bearbeiten: ' + name;
+    document.getElementById('tool-edit-name').value = name;
+    document.getElementById('tool-name').value = name;
+    document.getElementById('tool-name').disabled = true;
+    document.getElementById('tool-description').value = tool.DESCRIPTION || '';
+    document.getElementById('tool-sql').value = tool.SQL_QUERY || '';
+    document.getElementById('tool-active').checked = tool.ACTIVE;
+    document.getElementById('sql-validation').innerHTML = '';
+
+    const paramsList = document.getElementById('params-list');
+    paramsList.innerHTML = '';
+    (tool.parameters || []).forEach(p => addParamRow(p.name, p.type, p.description, p.required));
+
+    document.getElementById('tool-modal').classList.add('show');
+}
+
+function addParamRow(name = '', type = 'string', desc = '', req = false) {
+    const div = document.createElement('div');
+    div.className = 'param-row';
+    div.innerHTML = `
+        <input type="text" placeholder="Name" value="${esc(name)}" class="p-name">
+        <select class="p-type">
+            <option value="string" ${type==='string'?'selected':''}>string</option>
+            <option value="number" ${type==='number'?'selected':''}>number</option>
+            <option value="integer" ${type==='integer'?'selected':''}>integer</option>
+            <option value="boolean" ${type==='boolean'?'selected':''}>boolean</option>
+        </select>
+        <input type="text" placeholder="Beschreibung" value="${esc(desc)}" class="p-desc">
+        <label class="checkbox-group"><input type="checkbox" class="p-req" ${req?'checked':''}> Pflicht</label>
+        <button class="remove-param" onclick="this.parentElement.remove()">&times;</button>
+    `;
+    document.getElementById('params-list').appendChild(div);
+}
+
+async function saveTool() {
+    const editName = document.getElementById('tool-edit-name').value;
+    const isEdit = !!editName;
+
+    const name = isEdit ? editName : document.getElementById('tool-name').value.trim();
+    const description = document.getElementById('tool-description').value.trim();
+    const sqlQuery = document.getElementById('tool-sql').value.trim();
+    const active = document.getElementById('tool-active').checked;
+
+    if (!name || !sqlQuery) {
+        toast('Name und SQL Query sind Pflichtfelder', 'error');
+        return;
+    }
+
+    const parameters = Array.from(document.querySelectorAll('#params-list .param-row')).map(row => ({
+        name: row.querySelector('.p-name').value.trim(),
+        type: row.querySelector('.p-type').value,
+        description: row.querySelector('.p-desc').value.trim(),
+        required: row.querySelector('.p-req').checked
+    })).filter(p => p.name);
+
+    const body = JSON.stringify({ name, description, sqlQuery, active, parameters });
+
+    let result;
+    if (isEdit) {
+        result = await api('/tools/' + encodeURIComponent(name), { method: 'PUT', body });
+    } else {
+        result = await api('/tools', { method: 'POST', body });
+    }
+
+    if (result.error) {
+        toast(result.error, 'error');
+        return;
+    }
+
+    toast(isEdit ? 'Tool aktualisiert' : 'Tool erstellt');
+    closeModal();
+    loadTools();
+}
+
+// SQL validation on blur
+document.getElementById('tool-sql').addEventListener('blur', async function() {
+    const sql = this.value.trim();
+    const el = document.getElementById('sql-validation');
+    if (!sql) { el.innerHTML = ''; return; }
+    const result = await api('/tools/validate-sql', { method: 'POST', body: JSON.stringify({ sql }) });
+    if (result.valid) {
+        el.innerHTML = '<span style="color:#3fb950">&#10003; SQL gültig</span>';
+    } else {
+        el.innerHTML = '<span style="color:#f85149">&#10007; ' + esc(result.error) + '</span>';
+    }
+});
+
+// Tables
+async function loadTables() {
+    const tables = await api('/tables');
+    const container = document.getElementById('tables-list');
+    if (tables.length === 0) {
+        container.innerHTML = '<div class="empty-state">Keine Tabellen registriert</div>';
+        return;
+    }
+    container.innerHTML = `<table>
+        <thead><tr><th>Tabelle</th><th>Beschreibung</th><th>Erstellt</th><th>Aktionen</th></tr></thead>
+        <tbody>${tables.map(t => `
+            <tr>
+                <td><strong>${esc(t.TABLE_NAME)}</strong></td>
+                <td>${esc(t.DESCRIPTION || '')}</td>
+                <td>${t.CREATED_AT ? new Date(t.CREATED_AT).toLocaleDateString('de') : '—'}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-sm" onclick="showTableSchema('${esc(t.TABLE_NAME)}')">Schema</button>
+                        <button class="btn btn-sm" onclick="showTableData('${esc(t.TABLE_NAME)}')">Daten</button>
+                    </div>
+                </td>
+            </tr>
+        `).join('')}</tbody>
+    </table>`;
+    document.getElementById('table-detail').innerHTML = '';
+}
+
+async function showTableSchema(name) {
+    const schema = await api('/tables/' + encodeURIComponent(name) + '/schema');
+    document.getElementById('table-detail').innerHTML = `
+        <h3 style="margin-bottom:12px">Schema: ${esc(name)}</h3>
+        <table>
+            <thead><tr><th>Spalte</th><th>Datentyp</th><th>Beschreibung</th><th>Nullable</th><th>Primary Key</th></tr></thead>
+            <tbody>${schema.map(c => `
+                <tr>
+                    <td>${esc(c.COLUMN_NAME)}</td>
+                    <td><code>${esc(c.DATA_TYPE)}</code></td>
+                    <td>${esc(c.DESCRIPTION || '')}</td>
+                    <td>${c.NULLABLE ? 'Ja' : 'Nein'}</td>
+                    <td>${c.PRIMARY_KEY ? '&#128273;' : ''}</td>
+                </tr>
+            `).join('')}</tbody>
+        </table>`;
+}
+
+async function showTableData(name) {
+    const result = await api('/tables/' + encodeURIComponent(name) + '/data?limit=50');
+    if (!result.data || result.data.length === 0) {
+        document.getElementById('table-detail').innerHTML = `<h3 style="margin-bottom:12px">${esc(name)}</h3><div class="empty-state">Keine Daten</div>`;
+        return;
+    }
+    const cols = Object.keys(result.data[0]);
+    document.getElementById('table-detail').innerHTML = `
+        <h3 style="margin-bottom:12px">${esc(name)} (${result.rowCount} Zeilen)</h3>
+        <div class="data-table-wrap">
+            <table>
+                <thead><tr>${cols.map(c => '<th>' + esc(c) + '</th>').join('')}</tr></thead>
+                <tbody>${result.data.map(row => '<tr>' + cols.map(c => '<td>' + esc(String(row[c] ?? '')) + '</td>').join('') + '</tr>').join('')}</tbody>
+            </table>
+        </div>`;
+}
+
+// Escape HTML
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Init
+loadDashboard();
+</script>
+</body>
+</html>

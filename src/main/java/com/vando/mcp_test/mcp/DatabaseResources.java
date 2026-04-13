@@ -7,7 +7,6 @@ import org.springframework.ai.mcp.annotation.McpResource;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 @Component

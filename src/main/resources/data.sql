@@ -18,6 +18,61 @@ INSERT INTO COLUMN_REGISTRY (TABLE_NAME, COLUMN_NAME, DATA_TYPE, DESCRIPTION, NU
     ('ORDERS', 'AMOUNT',      'DECIMAL(10,2)',  'Order amount in EUR',        FALSE, FALSE, 4),
     ('ORDERS', 'ORDER_DATE',  'DATE',           'Date the order was placed',  TRUE,  FALSE, 5);
 
+-- =====================================================
+-- Dynamic MCP Tool Definitions
+-- =====================================================
+
+-- Tool: list-tables (no parameters)
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('list-tables', 'List all registered database tables with their descriptions',
+     'SELECT TABLE_NAME, DESCRIPTION, CREATED_AT FROM TABLE_REGISTRY ORDER BY TABLE_NAME');
+
+-- Tool: describe-table (1 parameter)
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('describe-table', 'Show column definitions for a specific table including name, data type, nullable, and primary key information',
+     'SELECT COLUMN_NAME, DATA_TYPE, DESCRIPTION, NULLABLE, PRIMARY_KEY FROM COLUMN_REGISTRY WHERE TABLE_NAME = :tableName ORDER BY ORDINAL');
+
+INSERT INTO TOOL_PARAMETER (TOOL_NAME, PARAM_NAME, PARAM_TYPE, DESCRIPTION, REQUIRED, ORDINAL) VALUES
+    ('describe-table', 'tableName', 'string', 'Name of the table to describe', TRUE, 1);
+
+-- Tool: query-customers (no parameters, returns all customers)
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('query-customers', 'Retrieve all customers',
+     'SELECT * FROM CUSTOMERS ORDER BY ID');
+
+-- Tool: customers-by-city (1 parameter)
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('customers-by-city', 'Find customers in a specific city',
+     'SELECT * FROM CUSTOMERS WHERE CITY = :city ORDER BY NAME');
+
+INSERT INTO TOOL_PARAMETER (TOOL_NAME, PARAM_NAME, PARAM_TYPE, DESCRIPTION, REQUIRED, ORDINAL) VALUES
+    ('customers-by-city', 'city', 'string', 'City to filter by', TRUE, 1);
+
+-- Tool: orders-by-customer (1 parameter)
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('orders-by-customer', 'Find orders for a customer by name (supports LIKE patterns)',
+     'SELECT o.ID, o.PRODUCT, o.AMOUNT, o.ORDER_DATE, c.NAME AS CUSTOMER_NAME FROM ORDERS o JOIN CUSTOMERS c ON o.CUSTOMER_ID = c.ID WHERE c.NAME LIKE :customerName ORDER BY o.ORDER_DATE DESC');
+
+INSERT INTO TOOL_PARAMETER (TOOL_NAME, PARAM_NAME, PARAM_TYPE, DESCRIPTION, REQUIRED, ORDINAL) VALUES
+    ('orders-by-customer', 'customerName', 'string', 'Customer name or LIKE pattern (e.g. %Muster%)', TRUE, 1);
+
+-- Tool: high-value-orders (1 parameter)
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('high-value-orders', 'Find orders above a given amount',
+     'SELECT o.ID, c.NAME AS CUSTOMER_NAME, o.PRODUCT, o.AMOUNT, o.ORDER_DATE FROM ORDERS o JOIN CUSTOMERS c ON o.CUSTOMER_ID = c.ID WHERE o.AMOUNT > :minAmount ORDER BY o.AMOUNT DESC');
+
+INSERT INTO TOOL_PARAMETER (TOOL_NAME, PARAM_NAME, PARAM_TYPE, DESCRIPTION, REQUIRED, ORDINAL) VALUES
+    ('high-value-orders', 'minAmount', 'number', 'Minimum order amount', TRUE, 1);
+
+-- Tool: count-rows (1 parameter — uses dynamic table name via registry lookup)
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('count-customers', 'Count the number of customers',
+     'SELECT COUNT(*) AS ROW_COUNT FROM CUSTOMERS');
+
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('count-orders', 'Count the number of orders',
+     'SELECT COUNT(*) AS ROW_COUNT FROM ORDERS');
+
 -- Example customers
 INSERT INTO CUSTOMERS (NAME, EMAIL, CITY) VALUES
     ('Max Mustermann', 'max@example.com', 'Berlin'),

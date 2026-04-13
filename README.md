@@ -1,8 +1,9 @@
 # MCP Database Explorer Server
 
 Ein MCP (Model Context Protocol) Server auf Basis von Spring Boot und Spring AI,
-der dynamischen Zugriff auf Datenbanktabellen ermöglicht. Tabellen können zur
-Laufzeit registriert, abgefragt und verwaltet werden.
+der dynamischen Zugriff auf Datenbanktabellen ermöglicht. MCP-Tools werden als
+SQL-Query-Templates in der Datenbank gespeichert und können zur Laufzeit
+hinzugefügt, geändert oder entfernt werden.
 
 ## Voraussetzungen
 
@@ -44,6 +45,7 @@ Der Server startet auf **Port 8080**.
 | Endpunkt | Beschreibung |
 |---|---|
 | `http://localhost:8080/mcp` | MCP Server (Streamable-HTTP Protokoll) |
+| `POST http://localhost:8080/api/tools/refresh` | Tools aus der Datenbank neu laden |
 | `http://localhost:8080/h2-console` | H2 Datenbank-Konsole (Entwicklung) |
 
 ### H2-Konsole Zugangsdaten
@@ -77,15 +79,38 @@ Dann als Transport "Streamable HTTP" wählen und `http://localhost:8080/mcp` ein
 
 ## MCP-Funktionen
 
-### Tools (5)
+### Tools (dynamisch)
+
+Tools werden aus der Tabelle `TOOL_REGISTRY` geladen. Jedes Tool führt ein vordefiniertes
+SQL-SELECT-Statement aus. Parameter werden über `TOOL_PARAMETER` definiert.
+
+**Mitgelieferte Seed-Tools:**
 
 | Tool | Beschreibung |
 |---|---|
 | `list-tables` | Alle registrierten Tabellen mit Beschreibung auflisten |
-| `describe-table` | Spaltendefinitionen einer Tabelle anzeigen (Name, Typ, Nullable, Primary Key) |
-| `query-table` | Daten abfragen mit optionalem Filter, Sortierung und Limit |
-| `count-rows` | Anzahl der Zeilen einer Tabelle zählen |
-| `register-table` | Neue Tabelle dynamisch registrieren und in der Datenbank erstellen |
+| `describe-table` | Spaltendefinitionen einer Tabelle anzeigen |
+| `query-customers` | Alle Kunden abrufen |
+| `customers-by-city` | Kunden nach Stadt filtern |
+| `orders-by-customer` | Bestellungen eines Kunden suchen (LIKE-Muster) |
+| `high-value-orders` | Bestellungen über einem Mindestbetrag |
+| `count-customers` | Anzahl der Kunden |
+| `count-orders` | Anzahl der Bestellungen |
+
+**Neues Tool zur Laufzeit hinzufügen:**
+
+```sql
+-- In der H2-Konsole oder per SQL-Client:
+INSERT INTO TOOL_REGISTRY (TOOL_NAME, DESCRIPTION, SQL_QUERY) VALUES
+    ('my-tool', 'Beschreibung des Tools', 'SELECT * FROM CUSTOMERS WHERE CITY = :city');
+
+INSERT INTO TOOL_PARAMETER (TOOL_NAME, PARAM_NAME, PARAM_TYPE, DESCRIPTION, REQUIRED, ORDINAL) VALUES
+    ('my-tool', 'city', 'string', 'Stadt zum Filtern', TRUE, 1);
+```
+
+Danach `POST http://localhost:8080/api/tools/refresh` aufrufen — das Tool ist sofort im MCP Client verfügbar.
+
+**Sicherheit:** Nur `SELECT`-Queries erlaubt. DDL/DML-Keywords und gefährliche H2-Funktionen werden blockiert. Parameter werden per `NamedParameterJdbcTemplate` gebunden (kein SQL-Injection). Queries haben ein Timeout von 10 Sekunden und ein automatisches LIMIT von 1000 Zeilen.
 
 ### Resources (3)
 
@@ -130,4 +155,4 @@ Der Server startet mit zwei vordefinierten Tabellen:
    spring.h2.console.enabled=false
    ```
 
-3. Tabellen über das `register-table`-Tool oder direkt auf dem IBM i anlegen und in der Registry registrieren.
+3. Tabellen direkt auf dem IBM i anlegen, in der Registry registrieren und passende Tools in `TOOL_REGISTRY` definieren.
