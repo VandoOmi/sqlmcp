@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Admin – Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e1e4e8; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .login-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 40px; width: 360px; }
+        h1 { font-size: 24px; color: #58a6ff; margin-bottom: 6px; text-align: center; }
+        .subtitle { font-size: 13px; color: #8b949e; text-align: center; margin-bottom: 28px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; color: #8b949e; margin-bottom: 6px; }
+        .form-group input { width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #e1e4e8; font-size: 14px; font-family: inherit; }
+        .form-group input:focus { outline: none; border-color: #58a6ff; }
+        .btn-login { width: 100%; padding: 10px; background: #238636; border: 1px solid #2ea043; border-radius: 6px; color: #fff; font-size: 15px; cursor: pointer; margin-top: 8px; font-family: inherit; }
+        .btn-login:hover { background: #2ea043; }
+        .error-msg { background: rgba(218,54,51,0.15); border: 1px solid #da3633; color: #f85149; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; display: none; }
+    </style>
+</head>
+<body>
+<div class="login-box">
+    <h1>MCP Admin</h1>
+    <p class="subtitle">Admin Center Login</p>
+    <div class="error-msg" id="error-msg">Ungültige Anmeldedaten. Bitte erneut versuchen.</div>
+    <form action="/login" method="post">
+        <div class="form-group">
+            <label for="username">Benutzername</label>
+            <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+        </div>
+        <div class="form-group">
+            <label for="password">Passwort</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-login">Anmelden</button>
+    </form>
+</div>
+<script>
+    if (window.location.search.includes('error')) {
+        document.getElementById('error-msg').style.display = 'block';
+    }
+</script>
+</body>
+</html>
