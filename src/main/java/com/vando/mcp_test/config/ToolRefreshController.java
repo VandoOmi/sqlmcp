@@ -9,6 +9,10 @@ import com.vando.mcp_test.service.TableRegistryService;
 import com.vando.mcp_test.service.ToolRegistryService;
 import com.vando.mcp_test.service.ToolRegistryService.ToolParameter;
 import com.vando.mcp_test.service.DataQueryService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.SpringApplication;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,22 +24,27 @@ import java.util.Map;
 @RequestMapping("/api")
 public class ToolRefreshController {
 
+    private static final Logger log = LoggerFactory.getLogger(ToolRefreshController.class);
+
     private final DynamicToolManager dynamicToolManager;
     private final ToolRegistryService toolRegistry;
     private final TableRegistryService tableRegistry;
     private final DataQueryService dataQuery;
     private final DatabaseConfigService databaseConfigService;
+    private final ConfigurableApplicationContext applicationContext;
 
     public ToolRefreshController(DynamicToolManager dynamicToolManager,
                                  ToolRegistryService toolRegistry,
                                  TableRegistryService tableRegistry,
                                  DataQueryService dataQuery,
-                                 DatabaseConfigService databaseConfigService) {
+                                 DatabaseConfigService databaseConfigService,
+                                 ConfigurableApplicationContext applicationContext) {
         this.dynamicToolManager = dynamicToolManager;
         this.toolRegistry = toolRegistry;
         this.tableRegistry = tableRegistry;
         this.dataQuery = dataQuery;
         this.databaseConfigService = databaseConfigService;
+        this.applicationContext = applicationContext;
     }
 
     // ---- Dashboard ----
@@ -238,6 +247,22 @@ public class ToolRefreshController {
     public ResponseEntity<?> resetDatabaseConfig() {
         databaseConfigService.resetToDefault();
         return ResponseEntity.ok(Map.of("message", "Datenbankverbindung auf H2 Standard zurückgesetzt"));
+    }
+
+    @PostMapping("/restart")
+    public ResponseEntity<?> restartServer() {
+        log.info("Server restart requested via admin panel");
+        Thread restartThread = new Thread(() -> {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            int exitCode = SpringApplication.exit(applicationContext, () -> 0);
+            System.exit(exitCode);
+        });
+        restartThread.start();
+        return ResponseEntity.ok(Map.of("message", "Server wird neu gestartet…"));
     }
 
     // ---- Request DTOs ----

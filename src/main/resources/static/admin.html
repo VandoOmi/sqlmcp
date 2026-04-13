@@ -183,9 +183,13 @@
             </div>
 
             <div style="margin-top:16px;padding:12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:12px;color:#8b949e">
-                <strong style="color:#e1e4e8">Hinweis:</strong> Der JDBC-Treiber für die gewählte Datenbank muss im Classpath vorhanden sein.
-                H2 ist bereits enthalten. Für andere Datenbanken muss der entsprechende Treiber in der <code>pom.xml</code> ergänzt werden.<br><br>
-                Beispiel PostgreSQL: <code>&lt;dependency&gt;&lt;groupId&gt;org.postgresql&lt;/groupId&gt;&lt;artifactId&gt;postgresql&lt;/artifactId&gt;&lt;scope&gt;runtime&lt;/scope&gt;&lt;/dependency&gt;</code>
+                <strong style="color:#e1e4e8">Unterstützte Datenbanken:</strong> H2, PostgreSQL, MySQL / MariaDB und Microsoft SQL Server sind bereits im Lieferumfang enthalten und können direkt verwendet werden. Oracle und IBM DB2 erfordern manuelle Treiberinstallation.
+            </div>
+
+            <div style="margin-top:24px;padding:16px;background:#0d1117;border:1px solid #30363d;border-radius:6px">
+                <h3 style="margin-bottom:8px;font-size:14px;color:#e1e4e8">&#128260; Server Neustart</h3>
+                <p style="font-size:12px;color:#8b949e;margin-bottom:12px">Nach dem Speichern einer neuen Treiber-Konfiguration einen Neustart auslösen, damit alle Änderungen wirksam werden.</p>
+                <button class="btn btn-danger" onclick="restartServer()">&#9889; Server neu starten</button>
             </div>
         </div>
     </div>
@@ -556,6 +560,18 @@ async function resetDbConfig() {
     document.getElementById('config-test-result').innerHTML = '';
     loadDbConfig();
     loadDashboard();
+}
+
+async function restartServer() {
+    if (!confirm('Server wirklich neu starten? Die Verbindung wird kurz unterbrochen.')) return;
+    try {
+        await api('/restart', { method: 'POST' });
+        toast('Server wird neu gestartet… Seite lädt in 10 Sekunden neu.');
+        setTimeout(() => location.reload(), 10000);
+    } catch (e) {
+        toast('Neustart ausgelöst – Seite lädt in 10 Sekunden neu.');
+        setTimeout(() => location.reload(), 10000);
+    }
 }
 
 function configBody() {
