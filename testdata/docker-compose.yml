@@ -1,0 +1,77 @@
+version: "3.9"
+
+# =====================================================
+# Test-Datenbanken fuer MCP DB-Explorer
+# =====================================================
+# Starten:  docker compose up -d
+# Stoppen:  docker compose down
+# Loeschen: docker compose down -v  (entfernt auch Daten)
+# =====================================================
+
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────
+  postgres:
+    image: postgres:17
+    container_name: mcp-test-postgres
+    environment:
+      POSTGRES_DB: mcp_testdb
+      POSTGRES_USER: mcp_user
+      POSTGRES_PASSWORD: mcp_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init/postgres:/docker-entrypoint-initdb.d
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp_user -d mcp_testdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── MySQL ────────────────────────────────────────────
+  mysql:
+    image: mysql:8.4
+    container_name: mcp-test-mysql
+    environment:
+      MYSQL_DATABASE: mcp_testdb
+      MYSQL_USER: mcp_user
+      MYSQL_PASSWORD: mcp_pass
+      MYSQL_ROOT_PASSWORD: root_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./init/mysql:/docker-entrypoint-initdb.d
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "mcp_user", "-pmcp_pass"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── SQL Server ───────────────────────────────────────
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mcp-test-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "McpTest#2026"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - ./init/mssql:/docker-entrypoint-initdb.d
+      - mssqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'McpTest#2026' -C -Q 'SELECT 1' -b"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # SQL Server fuehrt init-Skripte nicht automatisch aus,
+    # daher nutzen wir einen separaten Init-Container:
+    entrypoint: /bin/bash -c "(/docker-entrypoint-initdb.d/setup.sh &) && /opt/mssql/bin/sqlservr"
+
+volumes:
+  pgdata:
+  mysqldata:
+  mssqldata:
