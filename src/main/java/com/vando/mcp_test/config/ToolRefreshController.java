@@ -1,5 +1,7 @@
 package com.vando.mcp_test.config;
 
+import com.vando.mcp_test.config.DatabaseConfigService;
+import com.vando.mcp_test.config.DatabaseConnectionConfig;
 import com.vando.mcp_test.mcp.DynamicToolManager;
 import com.vando.mcp_test.mcp.DynamicToolManager.RefreshResult;
 import com.vando.mcp_test.mcp.SqlValidator;
@@ -22,15 +24,18 @@ public class ToolRefreshController {
     private final ToolRegistryService toolRegistry;
     private final TableRegistryService tableRegistry;
     private final DataQueryService dataQuery;
+    private final DatabaseConfigService databaseConfigService;
 
     public ToolRefreshController(DynamicToolManager dynamicToolManager,
                                  ToolRegistryService toolRegistry,
                                  TableRegistryService tableRegistry,
-                                 DataQueryService dataQuery) {
+                                 DataQueryService dataQuery,
+                                 DatabaseConfigService databaseConfigService) {
         this.dynamicToolManager = dynamicToolManager;
         this.toolRegistry = toolRegistry;
         this.tableRegistry = tableRegistry;
         this.dataQuery = dataQuery;
+        this.databaseConfigService = databaseConfigService;
     }
 
     // ---- Dashboard ----
@@ -41,6 +46,7 @@ public class ToolRefreshController {
         stats.put("tools", toolRegistry.listAllTools().size());
         stats.put("activeTools", toolRegistry.loadActiveTools().size());
         stats.put("tables", tableRegistry.listTables().size());
+        stats.put("externalDb", databaseConfigService.isExternalConfigActive());
         return ResponseEntity.ok(stats);
     }
 
@@ -181,6 +187,57 @@ public class ToolRefreshController {
         result.put("rowCount", dataQuery.countRows(name));
         result.put("data", dataQuery.getTableData(name, limit));
         return ResponseEntity.ok(result);
+    }
+
+    // ---- Database Configuration ----
+
+    @GetMapping("/config/database")
+    public ResponseEntity<?> getDatabaseConfig() {
+        DatabaseConnectionConfig config = databaseConfigService.getCurrentConfigWithoutPassword();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("url", config.getUrl());
+        result.put("driverClassName", config.getDriverClassName());
+        result.put("username", config.getUsername());
+        result.put("externalConfigActive", databaseConfigService.isExternalConfigActive());
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/config/database/test")
+    public ResponseEntity<?> testDatabaseConfig(@RequestBody DatabaseConnectionConfig config) {
+        if (config.getUrl() == null || config.getUrl().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "URL ist erforderlich"));
+        }
+        if (config.getDriverClassName() == null || config.getDriverClassName().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", "Driver-Klasse ist erforderlich"));
+        }
+        try {
+            String dbInfo = databaseConfigService.testConnection(config);
+            return ResponseEntity.ok(Map.of("success", true, "info", dbInfo));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/config/database")
+    public ResponseEntity<?> saveDatabaseConfig(@RequestBody DatabaseConnectionConfig config) {
+        if (config.getUrl() == null || config.getUrl().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "URL ist erforderlich"));
+        }
+        if (config.getDriverClassName() == null || config.getDriverClassName().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Driver-Klasse ist erforderlich"));
+        }
+        try {
+            databaseConfigService.saveAndApply(config);
+            return ResponseEntity.ok(Map.of("message", "Konfiguration gespeichert und angewendet"));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("error", "Verbindungsfehler: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/config/database/reset")
+    public ResponseEntity<?> resetDatabaseConfig() {
+        databaseConfigService.resetToDefault();
+        return ResponseEntity.ok(Map.of("message", "Datenbankverbindung auf H2 Standard zurückgesetzt"));
     }
 
     // ---- Request DTOs ----
